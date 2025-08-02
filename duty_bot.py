@@ -9,9 +9,7 @@ import random
 from flask import Flask
 from threading import Thread
 import os
-from dotenv import load_dotenv
 
-load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 
 app = Flask('')
@@ -602,4 +600,5 @@ if __name__ == "__main__":
     except discord.LoginFailure:
         print("ERROR: Invalid bot token")
     except Exception as e:
+
         print(f"ERROR: Failed to start bot: {e}")

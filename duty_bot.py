@@ -391,24 +391,26 @@ async def viewduties(interaction: Interaction):
 
 @tree.command(name="dutystart", description="Start your duty shift and begin receiving reminders")
 async def dutystart(interaction: Interaction):
+    await interaction.response.defer(ephemeral=True)  # 🔁 Defer immediately to prevent timeout
+
     if not is_authorized_mod(interaction.user.id):
-        return await interaction.response.send_message("You are not authorized to start duty.", ephemeral=True)
+        return await interaction.followup.send("You are not authorized to start duty.", ephemeral=True)
 
     if interaction.user.id in ACTIVE_DUTIES:
-        return await interaction.response.send_message("You are already on duty.", ephemeral=True)
+        return await interaction.followup.send("You are already on duty.", ephemeral=True)
 
-    await interaction.response.defer(ephemeral=True)  # <== prevents 'Unknown interaction' error
-
-    # Cancel existing reminder task
+    # Cancel any existing reminder task
     if interaction.user.id in REMINDER_TASKS:
         REMINDER_TASKS[interaction.user.id].cancel()
         del REMINDER_TASKS[interaction.user.id]
         log_to_console("REMINDER_TASK_CANCELLED", interaction.user, {"Reason": "Starting new duty"})
 
+    now = datetime.now(timezone.utc)
+
     ACTIVE_DUTIES[interaction.user.id] = {
         "user": interaction.user,
-        "start_time": datetime.now(timezone.utc),
-        "last_continue": datetime.now(timezone.utc),
+        "start_time": now,
+        "last_continue": now,
         "continues": 0
     }
 
@@ -419,25 +421,28 @@ async def dutystart(interaction: Interaction):
     )
     embed.add_field(name="User", value=interaction.user.name)
     embed.add_field(name="User ID", value=str(interaction.user.id))
-    embed.add_field(name="Start Time", value=datetime.now(timezone.utc).strftime('%A, %d %B %Y %H:%M %p'))
+    embed.add_field(name="Start Time", value=now.strftime('%A, %d %B %Y %H:%M %p'))
 
     await interaction.followup.send(embed=embed, ephemeral=True)
 
     await send_log_embed("Duty Started", interaction.user, {
         "User": f"{interaction.user} ({interaction.user.id})",
-        "Start Time": datetime.now(timezone.utc).strftime('%A, %d %B %Y %H:%M %p')
+        "Start Time": now.strftime('%A, %d %B %Y %H:%M %p')
     })
 
+    # Start reminder task
     task = asyncio.create_task(schedule_reminder(interaction.user))
     REMINDER_TASKS[interaction.user.id] = task
     log_to_console("REMINDER_TASK_STARTED", interaction.user)
 
+
 @tree.command(name="endduty", description="End your current duty shift")
 async def endduty(interaction: Interaction):
-    if interaction.user.id not in ACTIVE_DUTIES:
-        return await interaction.response.send_message("You are not on duty.", ephemeral=True)
+    await interaction.response.defer(ephemeral=True)  # 🔁 Defer immediately
 
-    await interaction.response.defer(ephemeral=True)  # <== defer to prevent double reply
+    if interaction.user.id not in ACTIVE_DUTIES:
+        return await interaction.followup.send("You are not on duty.", ephemeral=True)
+
     await end_duty_session(interaction.user, auto=False)
     await interaction.followup.send("Duty ended.", ephemeral=True)
 
@@ -604,4 +609,5 @@ if __name__ == "__main__":
     except Exception as e:
 
         print(f"ERROR: Failed to start bot: {e}")
+
 

@@ -393,11 +393,13 @@ async def viewduties(interaction: Interaction):
 async def dutystart(interaction: Interaction):
     if not is_authorized_mod(interaction.user.id):
         return await interaction.response.send_message("You are not authorized to start duty.", ephemeral=True)
-    
+
     if interaction.user.id in ACTIVE_DUTIES:
         return await interaction.response.send_message("You are already on duty.", ephemeral=True)
 
-    # Cancel any existing reminder task for this user
+    await interaction.response.defer(ephemeral=True)  # <== prevents 'Unknown interaction' error
+
+    # Cancel existing reminder task
     if interaction.user.id in REMINDER_TASKS:
         REMINDER_TASKS[interaction.user.id].cancel()
         del REMINDER_TASKS[interaction.user.id]
@@ -419,14 +421,13 @@ async def dutystart(interaction: Interaction):
     embed.add_field(name="User ID", value=str(interaction.user.id))
     embed.add_field(name="Start Time", value=datetime.now(timezone.utc).strftime('%A, %d %B %Y %H:%M %p'))
 
-    await interaction.response.send_message(embed=embed, ephemeral=True)
+    await interaction.followup.send(embed=embed, ephemeral=True)
 
     await send_log_embed("Duty Started", interaction.user, {
         "User": f"{interaction.user} ({interaction.user.id})",
         "Start Time": datetime.now(timezone.utc).strftime('%A, %d %B %Y %H:%M %p')
     })
 
-    # Start reminder task
     task = asyncio.create_task(schedule_reminder(interaction.user))
     REMINDER_TASKS[interaction.user.id] = task
     log_to_console("REMINDER_TASK_STARTED", interaction.user)
@@ -436,8 +437,9 @@ async def endduty(interaction: Interaction):
     if interaction.user.id not in ACTIVE_DUTIES:
         return await interaction.response.send_message("You are not on duty.", ephemeral=True)
 
+    await interaction.response.defer(ephemeral=True)  # <== defer to prevent double reply
     await end_duty_session(interaction.user, auto=False)
-    await interaction.response.send_message("Duty ended.", ephemeral=True)
+    await interaction.followup.send("Duty ended.", ephemeral=True)
 
 @tree.command(name="total", description="View a user's total points")
 async def total(interaction: Interaction, user_id: str):
@@ -602,3 +604,4 @@ if __name__ == "__main__":
     except Exception as e:
 
         print(f"ERROR: Failed to start bot: {e}")
+
